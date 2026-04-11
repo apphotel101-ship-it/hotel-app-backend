@@ -1,0 +1,268 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ─── Enums ───────────────────────────────────────────────────────────────────
+
+enum AdminRole {
+  SUPER_ADMIN
+  MANAGER
+  STAFF
+}
+
+enum OrderStatus {
+  PLACED
+  ACKNOWLEDGED
+  IN_PROGRESS
+  READY
+  DELIVERED
+  RESOLVED
+  CANCELLED
+}
+
+enum FeedbackType {
+  FEEDBACK
+  COMPLAINT
+}
+
+enum UserType {
+  GUEST
+  ADMIN
+}
+
+// ─── Models ──────────────────────────────────────────────────────────────────
+
+model Hotel {
+  id        Int      @id @default(autoincrement()) @map("hotel_id")
+  name      String   @map("hotel_name") @db.VarChar(255)
+  subdomain String?  @unique @map("hotel_subdomain") @db.VarChar(100)
+  createdAt DateTime @default(now()) @map("created_at")
+
+  rooms         Room[]
+  guests        Guest[]
+  items         Item[]
+  orders        Order[]
+  notifications Notification[]
+  admins        Admin[]
+
+  @@map("hotels")
+}
+
+model Room {
+  id         Int      @id @default(autoincrement()) @map("room_id")
+  hotelId    Int      @map("hotel_id")
+  roomNumber String   @map("room_number") @db.VarChar(20)
+  qrToken    String?  @unique @map("qr_token") @db.VarChar(500)
+  qrImageUrl String?  @map("qr_image_url")
+  status     String   @default("Available") @map("status") @db.VarChar(20)
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  hotel     Hotel               @relation(fields: [hotelId], references: [id])
+  guests    Guest[]
+  orders    Order[]
+  feedbacks FeedbackComplaint[]
+
+  @@unique([hotelId, roomNumber])
+  @@map("rooms")
+}
+
+model Guest {
+  id        Int      @id @default(autoincrement()) @map("guest_id")
+  hotelId   Int      @map("hotel_id")
+  roomId    Int      @map("room_id")
+  name      String   @map("guest_name") @db.VarChar(255)
+  checkIn   DateTime @map("check_in") @db.Date
+  checkOut  DateTime @map("check_out") @db.Date
+  mobileNo  String   @map("mobile_no") @db.VarChar(20)
+  govtId    String   @map("govt_id") @db.VarChar(50)
+  isActive  Boolean  @default(true) @map("is_active")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  hotel         Hotel               @relation(fields: [hotelId], references: [id])
+  room          Room                @relation(fields: [roomId], references: [id])
+  cart          Cart?
+  orders        Order[]
+  feedbacks     FeedbackComplaint[]
+  refreshTokens RefreshToken[]
+
+  @@index([hotelId, roomId, isActive])
+  @@map("guests")
+}
+
+model Service {
+  id         Int      @id @default(autoincrement()) @map("service_id")
+  name       String   @unique @map("service_name") @db.VarChar(100)
+  isBillable Boolean  @map("is_billable")
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  items  Item[]
+  orders Order[]
+
+  @@map("services")
+}
+
+model Item {
+  id          Int      @id @default(autoincrement()) @map("item_id")
+  hotelId     Int      @map("hotel_id")
+  serviceId   Int      @map("service_id")
+  name        String   @map("item_name") @db.VarChar(255)
+  description String?  @map("item_description")
+  price       Decimal  @map("item_price") @db.Decimal(10, 2)
+  imageUrl    String?  @map("image_url")
+  isAvailable Boolean  @default(true) @map("is_available")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  hotel      Hotel       @relation(fields: [hotelId], references: [id])
+  service    Service     @relation(fields: [serviceId], references: [id])
+  cartItems  CartItem[]
+  orderItems OrderItem[]
+
+  @@unique([hotelId, serviceId, name])
+  @@index([hotelId, serviceId, isAvailable])
+  @@index([hotelId, name])
+  @@map("items")
+}
+
+model Cart {
+  id        Int      @id @default(autoincrement()) @map("cart_id")
+  guestId   Int      @unique @map("guest_id")
+  isActive  Boolean  @default(true) @map("is_active")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  guest Guest      @relation(fields: [guestId], references: [id])
+  items CartItem[]
+
+  @@map("carts")
+}
+
+model CartItem {
+  id       Int @id @default(autoincrement()) @map("cart_item_id")
+  cartId   Int @map("cart_id")
+  itemId   Int @map("item_id")
+  quantity Int
+
+  cart Cart @relation(fields: [cartId], references: [id])
+  item Item @relation(fields: [itemId], references: [id])
+
+  @@unique([cartId, itemId])
+  @@map("cart_items")
+}
+
+model Order {
+  id           Int         @id @default(autoincrement()) @map("order_id")
+  hotelId      Int         @map("hotel_id")
+  guestId      Int         @map("guest_id")
+  roomId       Int         @map("room_id")
+  serviceId    Int         @map("service_id")
+  status       OrderStatus @default(PLACED)
+  instructions String?
+  totalAmount  Decimal     @map("total_amount") @db.Decimal(10, 2)
+  isBillable   Boolean     @map("is_billable")
+  scheduledAt  DateTime?   @map("scheduled_at")
+  createdAt    DateTime    @default(now()) @map("created_at")
+  updatedAt    DateTime    @updatedAt @map("updated_at")
+
+  hotel     Hotel               @relation(fields: [hotelId], references: [id])
+  guest     Guest               @relation(fields: [guestId], references: [id])
+  room      Room                @relation(fields: [roomId], references: [id])
+  service   Service             @relation(fields: [serviceId], references: [id])
+  items     OrderItem[]
+  feedbacks FeedbackComplaint[]
+
+  @@index([hotelId, status])
+  @@index([guestId, status])
+  @@map("orders")
+}
+
+model OrderItem {
+  id            Int     @id @default(autoincrement()) @map("order_item_id")
+  orderId       Int     @map("order_id")
+  itemId        Int     @map("item_id")
+  nameSnapshot  String  @map("name_snapshot") @db.VarChar(255)
+  priceSnapshot Decimal @map("price_snapshot") @db.Decimal(10, 2)
+  imageSnapshot String? @map("image_snapshot")
+  quantity      Int
+
+  order Order @relation(fields: [orderId], references: [id])
+  item  Item  @relation(fields: [itemId], references: [id])
+
+  @@unique([orderId, itemId])
+  @@map("order_items")
+}
+
+model FeedbackComplaint {
+  id           Int          @id @default(autoincrement()) @map("feedback_id")
+  guestId      Int          @map("guest_id")
+  roomId       Int          @map("room_id")
+  orderId      Int?         @map("order_id")
+  type         FeedbackType
+  rating       Int?
+  comment      String?
+  imageUrl     String?      @map("image_url")
+  isAnonymous  Boolean      @default(false) @map("is_anonymous")
+  status       String       @default("RECEIVED") @db.VarChar(20)
+  responseText String?      @map("response_text")
+  createdAt    DateTime     @default(now()) @map("created_at")
+
+  guest Guest  @relation(fields: [guestId], references: [id])
+  room  Room   @relation(fields: [roomId], references: [id])
+  order Order? @relation(fields: [orderId], references: [id])
+
+  @@index([guestId, type])
+  @@index([createdAt])
+  @@map("feedback_complaints")
+}
+
+model Notification {
+  id               Int      @id @default(autoincrement()) @map("notification_id")
+  hotelId          Int      @map("hotel_id")
+  notificationType String   @map("notification_type") @db.VarChar(20)
+  referenceId      Int      @map("reference_id")
+  referenceType    String   @map("reference_type") @db.VarChar(20)
+  message          String
+  isRead           Boolean  @default(false) @map("is_read")
+  createdAt        DateTime @default(now()) @map("created_at")
+
+  hotel Hotel @relation(fields: [hotelId], references: [id])
+
+  @@index([hotelId, isRead])
+  @@map("notifications")
+}
+
+model Admin {
+  id              Int       @id @default(autoincrement()) @map("admin_id")
+  hotelId         Int       @map("hotel_id")
+  email           String    @unique @map("admin_email") @db.VarChar(255)
+  passwordHash    String    @map("password_hash") @db.VarChar(255)
+  role            AdminRole
+  reminderEnabled Boolean   @default(true) @map("reminder_enabled")
+  createdAt       DateTime  @default(now()) @map("created_at")
+
+  hotel         Hotel          @relation(fields: [hotelId], references: [id])
+  refreshTokens RefreshToken[]
+
+  @@index([hotelId])
+  @@map("admins")
+}
+
+model RefreshToken {
+  id        Int      @id @default(autoincrement())
+  tokenHash String   @unique @map("token_hash") @db.VarChar(255)
+  guestId   Int?     @map("guest_id")
+  adminId   Int?     @map("admin_id")
+  userType  UserType @map("user_type")
+  expiresAt DateTime @map("expires_at")
+  revoked   Boolean  @default(false)
+  createdAt DateTime @default(now()) @map("created_at")
+
+  guest Guest? @relation(fields: [guestId], references: [id])
+  admin Admin? @relation(fields: [adminId], references: [id])
+
+  @@index([tokenHash])
+  @@map("refresh_tokens")
+}
