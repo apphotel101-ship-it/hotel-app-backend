@@ -5,7 +5,7 @@ const REFRESH_SECRET = process.env.JWT_REFRESH_SECRET!;
 const QR_SECRET = process.env.QR_SECRET!;
 
 export function signAccessToken(payload: object): string {
-  return jwt.sign(payload, ACCESS_SECRET, { expiresIn: '15m' });
+  return jwt.sign(payload, ACCESS_SECRET, { expiresIn: '7d' });
 }
 
 export function signRefreshToken(payload: object): string {
