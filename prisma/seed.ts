@@ -1,10 +1,21 @@
+import { PrismaPg } from '@prisma/adapter-pg';
 import { PrismaClient } from '@prisma/client';
 import bcrypt from 'bcrypt';
 import * as dotenv from 'dotenv';
+import { Pool } from 'pg';
 
 dotenv.config();
 
-const prisma = new PrismaClient();
+// const prisma = new PrismaClient();
+
+ // 1. Setup the connection pool
+const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+
+// 2. Create the adapter
+const adapter = new PrismaPg(pool);
+
+// 3. Pass the adapter into the PrismaClient
+const prisma = new PrismaClient({ adapter });
 
 async function main() {
   const hotelName = process.env.HOTEL_NAME ?? 'My Hotel';

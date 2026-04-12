@@ -11,9 +11,10 @@
     "resolveJsonModule": true,
     "forceConsistentCasingInFileNames": true,
     "declaration": true,
-    "declarationMap": true,
-    "sourceMap": true
+    "sourceMap": true,
+    "typeRoots": ["./node_modules/@types", "./src/types"]
   },
   "include": ["src/**/*"],
+  "files": ["src/types/express.d.ts"],   // 👈 Force ts-node to always load this
   "exclude": ["node_modules", "dist"]
 }

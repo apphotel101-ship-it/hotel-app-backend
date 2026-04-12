@@ -21,6 +21,9 @@
   },
   "author": "",
   "license": "ISC",
+  "ts-node": {
+    "files": true        
+  },
   "bugs": {
     "url": "https://github.com/apphotel101-ship-it/hotel-app-backend/issues"
   },

@@ -1,4 +1,5 @@
 import { Request, Response, NextFunction } from 'express';
+import { GuestPayload, AdminPayload } from '../types/auth.types';
 import { verifyAccessToken } from '../lib/jwt';
 
 function extractToken(req: Request): string | null {
@@ -15,7 +16,7 @@ export function authenticateGuest(req: Request, res: Response, next: NextFunctio
     if (payload.type !== 'GUEST' || payload.hotel_id !== req.hotelId) {
       res.status(403).json({ message: 'Forbidden' }); return;
     }
-    req.guest = payload as unknown as Express.Request['guest'];
+    req.guest = payload as unknown as GuestPayload;
     next();
   } catch {
     res.status(401).json({ message: 'Invalid or expired token' });
@@ -30,7 +31,7 @@ export function authenticateAdmin(req: Request, res: Response, next: NextFunctio
     if (payload.type !== 'ADMIN' || payload.hotel_id !== req.hotelId) {
       res.status(403).json({ message: 'Forbidden' }); return;
     }
-    req.admin = payload as unknown as Express.Request['admin'];
+    req.admin = payload as unknown as AdminPayload;
     next();
   } catch {
     res.status(401).json({ message: 'Invalid or expired token' });
@@ -45,8 +46,12 @@ export function authenticateAny(req: Request, res: Response, next: NextFunction)
     if (payload.hotel_id !== req.hotelId) {
       res.status(403).json({ message: 'Forbidden' }); return;
     }
-    if (payload.type === 'GUEST') req.guest = payload as unknown as Express.Request['guest'];
-    else if (payload.type === 'ADMIN') req.admin = payload as unknown as Express.Request['admin'];
+    if (payload.type === 'GUEST') {
+      req.guest = payload as unknown as GuestPayload;
+    }
+    else if (payload.type === 'ADMIN') {
+      req.admin = payload as unknown as AdminPayload;
+    }
     else { res.status(403).json({ message: 'Forbidden' }); return; }
     next();
   } catch {
