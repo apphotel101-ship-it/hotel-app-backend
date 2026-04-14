@@ -15,12 +15,15 @@ type OrderStatus =
 const ACTIVE_STATUSES: OrderStatus[] = ['PLACED', 'ACKNOWLEDGED', 'IN_PROGRESS', 'READY'];
 const HISTORY_STATUSES: OrderStatus[] = ['DELIVERED', 'RESOLVED', 'CANCELLED'];
 
-function emitStatusUpdate(orderId: number, status: string) {
+function emitStatusUpdate(orderId: number, prevStatus: OrderStatus, nextStatus: OrderStatus) {
   try {
     getIO().of('/guest').to(`order-${orderId}`).emit('STATUS_UPDATE', {
       event: 'STATUS_UPDATE',
       order_id: orderId,
-      status,
+      status: nextStatus,
+      old_status: prevStatus,
+      new_status: nextStatus,
+      updated_at: new Date().toISOString(),
     });
   } catch { /* socket not ready */ }
 }
@@ -152,8 +155,17 @@ export async function cancelOrder(req: Request, res: Response): Promise<void> {
     res.status(400).json({ message: 'Order already cancelled' }); return;
   }
 
+  const previousStatus = order.status as OrderStatus;
   const updated = await prisma.order.update({ where: { id }, data: { status: 'CANCELLED' } });
-  emitStatusUpdate(id, 'CANCELLED');
+  emitStatusUpdate(id, previousStatus, 'CANCELLED');
+  emitAdminUpdate('ORDER_STATUS_UPDATED', {
+    event: 'ORDER_STATUS_UPDATED',
+    order_id: id,
+    old_status: previousStatus,
+    status: 'CANCELLED',
+    new_status: 'CANCELLED',
+    updated_at: new Date().toISOString(),
+  });
   res.json({ order_id: updated.id, status: updated.status });
 }
 
@@ -164,10 +176,18 @@ export async function updateOrderStatus(req: Request, res: Response): Promise<vo
 
   const order = await prisma.order.findFirst({ where: { id, hotelId: req.hotelId } });
   if (!order) { res.status(404).json({ message: 'Order not found' }); return; }
+  const currentStatus = order.status as OrderStatus;
 
   const updated = await prisma.order.update({ where: { id }, data: { status } });
-  emitStatusUpdate(id, status);
-  emitAdminUpdate('ORDER_STATUS_UPDATED', { event: 'ORDER_STATUS_UPDATED', order_id: id, status });
+  emitStatusUpdate(id, currentStatus, status);
+  emitAdminUpdate('ORDER_STATUS_UPDATED', {
+    event: 'ORDER_STATUS_UPDATED',
+    order_id: id,
+    old_status: currentStatus,
+    status,
+    new_status: status,
+    updated_at: new Date().toISOString(),
+  });
   res.json({ order_id: updated.id, status: updated.status });
 }
 
@@ -179,7 +199,16 @@ export async function acknowledgeOrder(req: Request, res: Response): Promise<voi
   if (!order) { res.status(404).json({ message: 'Order not found' }); return; }
 
   const updated = await prisma.order.update({ where: { id }, data: { status: 'ACKNOWLEDGED' } });
-  emitStatusUpdate(id, 'ACKNOWLEDGED');
+  const previousStatus = order.status as OrderStatus;
+  emitStatusUpdate(id, previousStatus, 'ACKNOWLEDGED');
+  emitAdminUpdate('ORDER_STATUS_UPDATED', {
+    event: 'ORDER_STATUS_UPDATED',
+    order_id: id,
+    old_status: previousStatus,
+    status: 'ACKNOWLEDGED',
+    new_status: 'ACKNOWLEDGED',
+    updated_at: new Date().toISOString(),
+  });
   res.json({ order_id: updated.id, status: updated.status });
 }
 
@@ -204,6 +233,7 @@ export async function reopenOrder(req: Request, res: Response): Promise<void> {
     },
   });
   emitAdminUpdate('NEW_ORDER', { event: 'NEW_ORDER', order_id: id, alarm: true });
+  emitStatusUpdate(id, 'RESOLVED', 'PLACED');
   res.json({ order_id: updated.id, status: updated.status });
 }
 
@@ -220,8 +250,16 @@ export async function guestConfirmOrder(req: Request, res: Response): Promise<vo
   });
   if (!order) { res.status(404).json({ message: 'Order not found or not in a confirmable state' }); return; }
 
+  const previousStatus = order.status as OrderStatus;
   const updated = await prisma.order.update({ where: { id }, data: { status: 'RESOLVED' } });
-  emitAdminUpdate('ORDER_STATUS_UPDATED', { event: 'ORDER_STATUS_UPDATED', order_id: id, status: 'RESOLVED' });
+  emitAdminUpdate('ORDER_STATUS_UPDATED', {
+    event: 'ORDER_STATUS_UPDATED',
+    order_id: id,
+    old_status: previousStatus,
+    status: 'RESOLVED',
+    new_status: 'RESOLVED',
+    updated_at: new Date().toISOString(),
+  });
   res.json({ order_id: updated.id, status: updated.status });
 }
 

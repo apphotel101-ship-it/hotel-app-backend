@@ -2,6 +2,13 @@ import { Request, Response } from 'express';
 import prisma from '../lib/prisma';
 import { getIO } from '../socket';
 
+type NewOrderEvent = {
+  order_id: number;
+  notification_id: number;
+  service: string;
+  created_at: Date;
+};
+
 async function getOrCreateCart(guestId: number) {
   const existing = await prisma.cart.findUnique({ where: { guestId } });
   if (existing) return existing;
@@ -133,6 +140,7 @@ export async function checkout(req: Request, res: Response): Promise<void> {
   }
 
   const createdOrders: { order_id: number; service: string; total_amount: number }[] = [];
+  const eventsToEmit: NewOrderEvent[] = [];
 
   await prisma.$transaction(async (tx) => {
     for (const [serviceId, lineItems] of groups.entries()) {
@@ -170,29 +178,38 @@ export async function checkout(req: Request, res: Response): Promise<void> {
           notificationType: 'ORDER',
           referenceId: order.id,
           referenceType: 'ORDER',
-          message: `New order from Room ${lineItems[0].item.name ? '' : ''}#${order.id} — ${service.name}`,
+          message: `New order #${order.id} for ${service.name}`,
         },
       });
 
       createdOrders.push({ order_id: order.id, service: service.name, total_amount: totalAmount });
-
-      // Emit to admin namespace after transaction
-      process.nextTick(() => {
-        try {
-          getIO().of('/admin').emit('NEW_ORDER', {
-            event: 'NEW_ORDER',
-            order_id: order.id,
-            notification_id: notification.id,
-            service: service.name,
-            alarm: true,
-          });
-        } catch { /* socket not ready */ }
+      eventsToEmit.push({
+        order_id: order.id,
+        notification_id: notification.id,
+        service: service.name,
+        created_at: order.createdAt,
       });
     }
 
     // Clear cart
     await tx.cartItem.deleteMany({ where: { cartId: cart.id } });
   });
+
+  // Emit only after DB transaction is committed.
+  for (const eventData of eventsToEmit) {
+    try {
+      getIO().of('/admin').emit('NEW_ORDER', {
+        event: 'NEW_ORDER',
+        order_id: eventData.order_id,
+        notification_id: eventData.notification_id,
+        service: eventData.service,
+        created_at: eventData.created_at,
+        alarm: true,
+      });
+    } catch {
+      // Socket server may be unavailable during startup.
+    }
+  }
 
   res.json({ order_ids: createdOrders.map((o) => o.order_id), orders: createdOrders });
 }
