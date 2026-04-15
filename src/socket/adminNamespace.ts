@@ -29,7 +29,7 @@ export function setupAdminNamespace(io: Server): void {
 
     try {
       const payload = verifyAccessToken(token) as Record<string, unknown>;
-      // if (payload.type !== 'ADMIN') return next(new Error('Forbidden'));
+      if (payload.type !== 'ADMIN') return next(new Error('Forbidden'));
       socket.data.adminId = payload.admin_id as number;
       socket.data.hotelId = payload.hotel_id as number;
       next();

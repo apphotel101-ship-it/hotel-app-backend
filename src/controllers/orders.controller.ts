@@ -54,7 +54,9 @@ export async function getActiveOrders(req: Request, res: Response): Promise<void
 
 // GET /api/v1/orders  (Both)
 export async function listOrders(req: Request, res: Response): Promise<void> {
-  const { status, service_id, room_id, date } = req.query as Record<string, string>;
+  // Now extracting from req.body instead of req.query
+  const { status, service_id, room_id, date } = req.body; 
+  
   const isGuest = !!req.guest;
   const isAdmin = !!req.admin;
 
@@ -62,7 +64,14 @@ export async function listOrders(req: Request, res: Response): Promise<void> {
     where: {
       hotelId: req.hotelId,
       ...(isGuest && { guestId: req.guest!.guest_id }),
-      ...(status && { status: status as OrderStatus }),
+      
+      // Since it's a JSON body, status is already a clean array or string
+      ...(status && { 
+        status: Array.isArray(status) 
+          ? { in: status as OrderStatus[] } 
+          : (status as OrderStatus) 
+      }),
+
       ...(service_id && { serviceId: parseInt(service_id) }),
       ...(isAdmin && room_id && { roomId: parseInt(room_id) }),
       ...(date && {

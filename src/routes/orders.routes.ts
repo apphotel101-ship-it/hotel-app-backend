@@ -11,7 +11,7 @@ router.patch('/orders/:order_id/reopen', authenticateGuest, ctrl.reopenOrder);
 router.patch('/orders/:order_id/guest-confirm', authenticateGuest, ctrl.guestConfirmOrder);
 
 // Both
-router.get('/orders', authenticateAny, ctrl.listOrders);
+router.post('/orders/search', authenticateAny, ctrl.listOrders);
 router.get('/orders/:order_id', authenticateAny, ctrl.getOrder);
 router.patch('/orders/:order_id/cancel', authenticateAny, ctrl.cancelOrder);
 

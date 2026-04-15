@@ -44,7 +44,7 @@ export function authenticateAny(req: Request, res: Response, next: NextFunction)
   try {
     const payload = verifyAccessToken(token) as Record<string, unknown>;
     if (payload.hotel_id !== req.hotelId) {
-      // res.status(403).json({ message: 'Forbidden' }); return;
+      res.status(403).json({ message: 'Forbidden' }); return;
     }
     if (payload.type === 'GUEST') {
       req.guest = payload as unknown as GuestPayload;
@@ -52,7 +52,7 @@ export function authenticateAny(req: Request, res: Response, next: NextFunction)
     else if (payload.type === 'ADMIN') {
       req.admin = payload as unknown as AdminPayload;
     }
-    // else { res.status(403).json({ message: 'Forbidden' }); return; }s
+    else { res.status(403).json({ message: 'Forbidden' }); return; }
     next();
   } catch {
     res.status(401).json({ message: 'Invalid or expired token' });
