@@ -81,7 +81,7 @@ export async function listOrders(req: Request, res: Response): Promise<void> {
         },
       }),
     },
-    include: { service: true, guest: true, room: true },
+    include: { service: true, guest: true, room: true, items: true },
     orderBy: { createdAt: 'desc' },
   });
 
@@ -94,6 +94,10 @@ export async function listOrders(req: Request, res: Response): Promise<void> {
       status: o.status,
       total_amount: Number(o.totalAmount),
       created_at: o.createdAt,
+      items: o.items.reduce<Record<string, number>>((acc, i) => {
+        acc[i.nameSnapshot] = (acc[i.nameSnapshot] ?? 0) + i.quantity;
+        return acc;
+      }, {}),
     })),
     total: orders.length,
   });
@@ -120,6 +124,7 @@ export async function getOrder(req: Request, res: Response): Promise<void> {
     service: order.service.name,
     status: order.status,
     instructions: order.instructions,
+    ...(req.admin && { admin_comment: order.adminComment }),
     total_amount: Number(order.totalAmount),
     is_billable: order.isBillable,
     scheduled_at: order.scheduledAt,
@@ -181,13 +186,21 @@ export async function cancelOrder(req: Request, res: Response): Promise<void> {
 // PATCH /api/v1/admin/orders/:order_id/status  (Admin)
 export async function updateOrderStatus(req: Request, res: Response): Promise<void> {
   const id = parseInt(req.params.order_id as string);
-  const { status } = req.body as { status: OrderStatus };
+  const { status, comment } = req.body as { status: OrderStatus; comment?: string | null };
 
   const order = await prisma.order.findFirst({ where: { id, hotelId: req.hotelId } });
   if (!order) { res.status(404).json({ message: 'Order not found' }); return; }
   const currentStatus = order.status as OrderStatus;
 
-  const updated = await prisma.order.update({ where: { id }, data: { status } });
+  const updated = await prisma.order.update({
+    where: { id },
+    data: {
+      status,
+      ...(comment !== undefined && {
+        adminComment: comment === null || comment === '' ? null : comment,
+      }),
+    },
+  });
   emitStatusUpdate(id, currentStatus, status);
   emitAdminUpdate('ORDER_STATUS_UPDATED', {
     event: 'ORDER_STATUS_UPDATED',
@@ -195,9 +208,14 @@ export async function updateOrderStatus(req: Request, res: Response): Promise<vo
     old_status: currentStatus,
     status,
     new_status: status,
+    comment: updated.adminComment ?? null,
     updated_at: new Date().toISOString(),
   });
-  res.json({ order_id: updated.id, status: updated.status });
+  res.json({
+    order_id: updated.id,
+    status: updated.status,
+    comment: updated.adminComment ?? null,
+  });
 }
 
 // PATCH /api/v1/admin/orders/:order_id/acknowledge  (Admin)

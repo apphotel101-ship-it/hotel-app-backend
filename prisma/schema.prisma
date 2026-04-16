@@ -161,6 +161,7 @@ model Order {
   serviceId    Int         @map("service_id")
   status       OrderStatus @default(PLACED)
   instructions String?
+  adminComment String?     @map("admin_comment")
   totalAmount  Decimal     @map("total_amount") @db.Decimal(10, 2)
   isBillable   Boolean     @map("is_billable")
   scheduledAt  DateTime?   @map("scheduled_at")
