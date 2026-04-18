@@ -18,12 +18,29 @@ const BED_TYPE_LABELS: Record<BedType, string> = {
   SINGLE: 'Single',
 };
 
+type GuestWithRoom = Prisma.GuestGetPayload<{ include: { room: true } }>;
+
 function normalizeJsonArray(value: Prisma.JsonValue): unknown[] {
   if (Array.isArray(value)) return value;
   return [];
 }
 
-function formatRoomListItem(room: Room) {
+function dateToYmd(d: Date): string {
+  return d.toISOString().slice(0, 10);
+}
+
+function formatGuestDetails(guest: GuestWithRoom) {
+  return {
+    guest_id: guest.id,
+    guest_name: guest.name,
+    room_number: guest.room.roomNumber,
+    check_in: dateToYmd(guest.checkIn),
+    check_out: dateToYmd(guest.checkOut),
+    is_active: guest.isActive,
+  };
+}
+
+function formatRoomListItem(room: Room, activeGuest: GuestWithRoom | null) {
   return {
     id: room.id,
     hotelId: room.hotelId,
@@ -41,6 +58,7 @@ function formatRoomListItem(room: Room) {
     images: normalizeJsonArray(room.images),
     isActive: room.isActive,
     updatedAt: room.updatedAt,
+    guestDetails: activeGuest ? formatGuestDetails(activeGuest) : null,
   };
 }
 
@@ -67,7 +85,29 @@ export async function listRooms(req: Request, res: Response): Promise<void> {
     where: { hotelId: req.hotelId },
     orderBy: { roomNumber: 'asc' },
   });
-  res.json({ rooms: rows.map(formatRoomListItem) });
+
+  const roomIds = rows.map((r) => r.id);
+  const activeGuests =
+    roomIds.length === 0
+      ? []
+      : await prisma.guest.findMany({
+          where: {
+            hotelId: req.hotelId,
+            roomId: { in: roomIds },
+            isActive: true,
+          },
+          include: { room: true },
+          orderBy: { createdAt: 'desc' },
+        });
+
+  const guestByRoomId = new Map<number, GuestWithRoom>();
+  for (const g of activeGuests) {
+    if (!guestByRoomId.has(g.roomId)) guestByRoomId.set(g.roomId, g);
+  }
+
+  res.json({
+    rooms: rows.map((r) => formatRoomListItem(r, guestByRoomId.get(r.id) ?? null)),
+  });
 }
 
 // POST /api/v1/admin/rooms
